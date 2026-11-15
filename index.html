@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#050508">
+<title>ABAS — مترجم ذكي</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;700&display=swap">
+<style>
+:root{--bg:#050508;--fg:#F5F5F7;--mut:#969AA8;--pu:#9B5CFF;--cy:#46D9FF;--card:rgba(255,255,255,.05);--bd:rgba(255,255,255,.09);--ok:#4ade80;--er:#ff6b81}
+*{box-sizing:border-box;margin:0;font-family:Vazirmatn,system-ui,sans-serif}
+body{background:radial-gradient(circle at 80% 0,rgba(155,92,255,.18),transparent 45%),radial-gradient(circle at 0 100%,rgba(70,217,255,.12),transparent 45%),var(--bg);color:var(--fg);min-height:100vh;padding:18px;max-width:760px;margin:auto}
+h1{font-size:1.6rem;background:linear-gradient(90deg,var(--cy),var(--pu));-webkit-background-clip:text;background-clip:text;color:transparent}
+.sub{color:var(--mut);font-size:.85rem;margin:4px 0 18px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:22px;padding:18px;margin-bottom:14px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.pill{font-size:.75rem;padding:4px 12px;border-radius:99px;border:1px solid var(--bd);color:var(--mut)}
+.pill.READY{color:var(--ok);border-color:var(--ok)}.pill.ERROR{color:var(--er);border-color:var(--er)}
+.pill.DOWNLOADING,.pill.LOADING,.pill.CHECKING{color:var(--cy);border-color:var(--cy)}
+.bar{height:8px;background:rgba(255,255,255,.08);border-radius:9px;overflow:hidden;margin:12px 0 6px}
+.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--cy),var(--pu));transition:width .3s}
+textarea,select,input{width:100%;background:rgba(0,0,0,.35);border:1px solid var(--bd);color:var(--fg);border-radius:14px;padding:12px;font-size:.95rem;outline:none}
+textarea{min-height:120px;resize:vertical}
+textarea:focus,select:focus,input:focus{border-color:var(--pu)}
+button{border:0;border-radius:14px;padding:12px 18px;font-weight:700;color:#fff;background:linear-gradient(135deg,var(--pu),#6b3fd4);cursor:pointer}
+button.alt{background:rgba(255,255,255,.08)}button:disabled{opacity:.4}
+label{display:block;font-size:.78rem;color:var(--mut);margin:12px 0 6px}
+.small{font-size:.78rem;color:var(--mut);line-height:1.7}
+#out{min-height:90px;white-space:pre-wrap;line-height:1.8}
+details summary{cursor:pointer;font-weight:700}
+</style>
+</head>
+<body>
+<h1>ABAS</h1>
+<div class="sub">مترجم ذكي — النموذج يعمل داخل متصفحك، وتلغرام للمراقبة والتحكم</div>
+
+<div class="card">
+  <div class="row" style="justify-content:space-between">
+    <b>محرك الترجمة</b><span class="pill" id="st">NOT_INITIALIZED</span>
+  </div>
+  <div class="bar"><i id="bar"></i></div>
+  <div class="small" id="det">Xenova/nllb-200-distilled-600M — لم يُحمَّل بعد</div>
+  <div class="row" style="margin-top:12px"><button id="loadBtn">تحميل المحرك والمكتبات</button><button class="alt" id="stBtn" disabled>اختبار ذاتي</button></div>
+  <div class="small" style="margin-top:8px">التنزيل يُحفظ على أجزاء (2MB) ويستأنف تلقائياً من آخر جزء عند الانقطاع أو الخروج من الصفحة أو إعادة فتحها. يُنزَّل النموذج والمكتبات مرة واحدة فقط.</div>
+  <div class="small" id="stOut" style="white-space:pre-wrap;margin-top:8px"></div>
+</div>
+
+<div class="card">
+  <b>مركز التخزين والمحرك</b>
+  <div class="small" id="stor" style="margin:10px 0;line-height:1.9"></div>
+  <div class="row"><button class="alt" id="persBtn">حماية التخزين</button><button class="alt" id="vfBtn">فحص الملفات</button><button class="alt" id="delBtn">حذف النموذج</button></div>
+  <div class="small" id="vfOut" style="margin-top:8px"></div>
+  <label>الترجمات المحفوظة (يمكن حذفها لتحرير المساحة)</label><div id="books"></div>
+</div>
+
+<div class="card">
+  <label>النص</label>
+  <textarea id="src" placeholder="اكتب أو الصق النص هنا"></textarea>
+  <div class="row">
+    <div style="flex:1"><label>من</label><select id="sl"></select></div>
+    <div style="flex:1"><label>إلى</label><select id="tl"></select></div>
+  </div>
+  <div class="row" style="margin-top:14px"><button id="trBtn" disabled>ترجم</button><button class="alt" id="cpBtn">نسخ</button></div>
+  <label>الترجمة</label>
+  <div id="out" class="card" style="margin:0"></div>
+</div>
+
+<div class="card">
+  <b>ترجمة كتاب / PDF في مكانها</b>
+  <div class="small">تُرسم كل صفحة كما هي (الصور والألوان والخلفية)، وتُستبدل كتل النص بالترجمة في المواضع نفسها. التقدم يُحفظ في جهازك، فيمكنك الإيقاف والاستئناف حتى بعد إغلاق الصفحة (اختر الملف نفسه مجدداً). الكتب الكبيرة تُصدَّر على أجزاء.</div>
+  <input id="pdfIn" type="file" accept="application/pdf" style="margin-top:10px">
+  <label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="ocrOn" checked style="width:auto"> OCR تلقائي للصفحات الممسوحة</label>
+  <div class="row" style="margin-top:12px"><button id="pdfGo" disabled>ابدأ / استأنف الترجمة</button><button class="alt" id="pdfStop" disabled>إيقاف</button></div>
+  <div class="bar"><i id="pbar"></i></div><div class="small" id="pst"></div>
+  <div class="row" style="margin-top:10px"><input id="pf" type="number" placeholder="من صفحة" style="width:105px"><input id="pt" type="number" placeholder="إلى صفحة" style="width:105px"><input id="pc" type="number" value="50" title="صفحات لكل ملف" style="width:90px"><button id="pdfExp" disabled>تصدير PDF</button></div>
+  <canvas id="pvCv" style="width:100%;border-radius:14px;margin-top:10px;display:none"></canvas>
+</div>
+
+<div class="card">
+  <b>ترجمة نص داخل صورة</b>
+  <div class="small">OCR ← ترجمة NLLB ← تغطية النص القديم بلون الخلفية وإعادة رسم المترجَم. ليست إزالة ذكية (Inpainting)؛ الخلفيات المعقدة قد تظهر عليها آثار، ولهذا يمكنك تعديل كل سطر وإعادة الرسم.</div>
+  <input id="imIn" type="file" accept="image/*" style="margin-top:10px">
+  <div class="row" style="margin-top:12px"><button id="imGo">ترجمة الصورة</button><button class="alt" id="imRe" disabled>إعادة رسم</button><button class="alt" id="imDl" disabled>حفظ PNG</button></div>
+  <div class="small" id="imSt" style="margin-top:8px"></div>
+  <canvas id="imCv" style="width:100%;border-radius:14px;margin-top:10px;display:none"></canvas>
+  <div id="imEd" style="margin-top:10px"></div>
+</div>
+
+<div class="card">
+  <details>
+    <summary>ربط بوت تلغرام (ريموت كنترول + مترجم للمستخدمين)</summary>
+    <label>Bot Token (يُحفظ في جهازك فقط)</label>
+    <input id="tok" type="password" placeholder="123456:ABC...">
+    <label>Owner Chat ID (رقم حسابك — وحده يملك /load و /cancel)</label>
+    <input id="own" inputmode="numeric" placeholder="مثال: 123456789">
+    <label>Operator IDs (اختياري، مفصولة بفواصل — يسمح لهم بـ /status /jobs أيضاً)</label>
+    <input id="ops" placeholder="111,222">
+    <div class="row" style="margin-top:12px"><button id="tgBtn">اتصال</button><span class="pill" id="tgst">غير متصل</span></div>
+    <div class="small" style="margin-top:10px">أي مستخدم يفتح البوت يختار لغته (عربي / English)، ثم يترجم نصوصاً وصوراً. أوامر: /start ‏· /menu ‏· /lang ‏· /to ‏· /t ‏· /status ‏· /load ‏· /jobs<br>الاتصال يُحفظ ويعاد تلقائياً عند فتح الصفحة. المتصفح لا يسمح لصفحة مغلقة بالعمل، لذلك أبقِ الصفحة مفتوحة (يُفعَّل منع إطفاء الشاشة وصوت صامت للإبقاء عليها نشطة).</div>
+  </details>
+</div>
+
+<script type="module">
+import {pipeline} from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.0";
+
+const MODEL="Xenova/nllb-200-distilled-600M";
+const CODES="ace_Arab ace_Latn acm_Arab acq_Arab aeb_Arab afr_Latn ajp_Arab aka_Latn amh_Ethi apc_Arab arb_Arab ars_Arab ary_Arab arz_Arab asm_Beng ast_Latn awa_Deva ayr_Latn azb_Arab azj_Latn bak_Cyrl bam_Latn ban_Latn bel_Cyrl bem_Latn ben_Beng bho_Deva bjn_Arab bjn_Latn bod_Tibt bos_Latn bug_Latn bul_Cyrl cat_Latn ceb_Latn ces_Latn cjk_Latn ckb_Arab crh_Latn cym_Latn dan_Latn deu_Latn dik_Latn dyu_Latn dzo_Tibt ell_Grek eng_Latn epo_Latn est_Latn eus_Latn ewe_Latn fao_Latn pes_Arab fij_Latn fin_Latn fon_Latn fra_Latn fur_Latn fuv_Latn gla_Latn gle_Latn glg_Latn grn_Latn guj_Gujr hat_Latn hau_Latn heb_Hebr hin_Deva hne_Deva hrv_Latn hun_Latn hye_Armn ibo_Latn ilo_Latn ind_Latn isl_Latn ita_Latn jav_Latn jpn_Jpan kab_Latn kac_Latn kam_Latn kan_Knda kas_Arab kas_Deva kat_Geor knc_Arab knc_Latn kaz_Cyrl kbp_Latn kea_Latn khm_Khmr kik_Latn kin_Latn kir_Cyrl kmb_Latn kon_Latn kor_Hang kmr_Latn lao_Laoo lvs_Latn lij_Latn lim_Latn lin_Latn lit_Latn lmo_Latn ltg_Latn ltz_Latn lua_Latn lug_Latn luo_Latn lus_Latn mag_Deva mai_Deva mal_Mlym mar_Deva min_Latn mkd_Cyrl plt_Latn mlt_Latn mni_Beng khk_Cyrl mos_Latn mri_Latn zsm_Latn mya_Mymr nld_Latn nno_Latn nob_Latn npi_Deva nso_Latn nus_Latn nya_Latn oci_Latn gaz_Latn ory_Orya pag_Latn pan_Guru pap_Latn pol_Latn por_Latn prs_Arab pbt_Arab quy_Latn ron_Latn run_Latn rus_Cyrl sag_Latn san_Deva sat_Beng scn_Latn shn_Mymr sin_Sinh slk_Latn slv_Latn smo_Latn sna_Latn snd_Arab som_Latn sot_Latn spa_Latn als_Latn srd_Latn srp_Cyrl ssw_Latn sun_Latn swe_Latn swh_Latn szl_Latn tam_Taml tat_Cyrl tel_Telu tgk_Cyrl tgl_Latn tha_Thai tir_Ethi taq_Latn taq_Tfng tpi_Latn tsn_Latn tso_Latn tuk_Latn tum_Latn tur_Latn twi_Latn tzm_Tfng uig_Arab ukr_Cyrl umb_Latn urd_Arab uzn_Latn vec_Latn vie_Latn war_Latn wol_Latn xho_Latn ydd_Hebr yor_Latn yue_Hant zho_Hans zho_Hant zul_Latn".split(" ");
+const ISO={arb:"ar",pes:"fa",zsm:"ms",lvs:"lv",swh:"sw",uzn:"uz",khk:"mn",plt:"mg",npi:"ne",ory:"or",gaz:"om",kmr:"ku",azj:"az",als:"sq",pbt:"ps",ydd:"yi",nob:"nb",nno:"nn",zho:"zh",prs:"fa-AF",ckb:"ckb"};
+let DN=null;try{DN=new Intl.DisplayNames(["ar"],{type:"language"})}catch(e){}
+const LANGS=CODES.map(c=>{const k=c.slice(0,3);let n=c;try{n=DN?DN.of(ISO[k]||k.replace(/^(...)$/,"$1")):c}catch(e){}return[c,(n&&n!==k&&n!==ISO[k]?n:k)+" · "+c]});
+const SHORT={ar:"arb_Arab",en:"eng_Latn",fr:"fra_Latn",de:"deu_Latn",es:"spa_Latn",it:"ita_Latn",pt:"por_Latn",ru:"rus_Cyrl",zh:"zho_Hans",ja:"jpn_Jpan",ko:"kor_Hang",tr:"tur_Latn",fa:"pes_Arab"};
+const $=id=>document.getElementById(id);
+$("sl").innerHTML='<option value="auto">اكتشاف تلقائي</option>'+LANGS.map(l=>`<option value="${l[0]}">${l[1]}</option>`).join("");
+$("tl").innerHTML=LANGS.map(l=>`<option value="${l[0]}">${l[1]}</option>`).join("");
+
+let state="NOT_INITIALIZED",translator=null,prog={pct:0,loaded:0,total:0,speed:0,file:""},jobs=[],err="";
+const files={};let loadPromise=null,lastT=0,lastB=0,preOK=false;
+
+const mb=b=>(b/1048576).toFixed(1)+" MB";
+const barTxt=p=>"["+"█".repeat(Math.round(p/5))+"░".repeat(20-Math.round(p/5))+"] "+Math.round(p)+"%";
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+function setState(s,e){
+  state=s;err=e||"";
+  $("st").textContent=s;$("st").className="pill "+s;
+  $("trBtn").disabled=$("stBtn").disabled=s!=="READY";
+  if(s==="READY"||s==="ERROR")tgNotify(statusText());
+}
+function render(){
+  $("bar").style.width=prog.pct+"%";
+  $("det").textContent=state==="DOWNLOADING"?`${mb(prog.loaded)} / ${prog.total?mb(prog.total):"?"} — ${Math.round(prog.pct)}%`+(prog.speed?` · ${mb(prog.speed)}/s`:""):state==="READY"?"المحرك جاهز":state==="ERROR"?err:MODEL;
+}
+function upd(file){
+  let l=0,t=0;for(const k in files){l+=files[k].l;t+=files[k].t}
+  const now=Date.now();
+  if(now-lastT>1000){prog.speed=Math.max(0,(l-lastB)/((now-lastT)/1000));lastT=now;lastB=l}
+  prog={...prog,loaded:l,total:t,pct:t?l/t*100:0,file:file||prog.file};
+  render();tgProgress();
+}
+
+/* ───── Keep-alive (browser cannot run a closed page; this keeps an open/background page working) ───── */
+let ac=null,wl2=null;
+function keepAlive(){
+  try{if(!ac){ac=new (window.AudioContext||window.webkitAudioContext)();const o=ac.createOscillator(),g=ac.createGain();g.gain.value=.0001;o.connect(g);g.connect(ac.destination);o.start()}ac.resume&&ac.resume()}catch(e){}
+  try{navigator.wakeLock&&navigator.wakeLock.request("screen").then(l=>{wl2=l}).catch(()=>{})}catch(e){}
+}
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"){keepAlive();resumeAll()}});
+window.addEventListener("online",()=>resumeAll());
+
+/* ───── IndexedDB: stores pg (page results) + ch (download chunks) ───── */
+const idb=()=>new Promise((ok,no)=>{const r=indexedDB.open("abas",2);r.onupgradeneeded=()=>{const d=r.result;for(const n of["pg","ch"])if(!d.objectStoreNames.contains(n))d.createObjectStore(n)};r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error)});
+async function dbGet(k,s="pg"){const d=await idb();return new Promise(ok=>{const q=d.transaction(s).objectStore(s).get(k);q.onsuccess=()=>ok(q.result);q.onerror=()=>ok()})}
+async function dbSet(k,v,s="pg"){const d=await idb();return new Promise((ok,no)=>{const t=d.transaction(s,"readwrite");t.objectStore(s).put(v,k);t.oncomplete=ok;t.onerror=()=>no(t.error)})}
+async function dbDelPrefix(p,s="ch"){const d=await idb();const keys=await new Promise(ok=>{const q=d.transaction(s).objectStore(s).getAllKeys();q.onsuccess=()=>ok(q.result);q.onerror=()=>ok([])});const t=d.transaction(s,"readwrite");keys.filter(k=>String(k).startsWith(p)).forEach(k=>t.objectStore(s).delete(k));return new Promise(ok=>{t.oncomplete=ok;t.onerror=ok})}
+
+/* ───── Resumable model download (Range chunks in IndexedDB → Cache Storage) ───── */
+const CACHE="transformers-cache",HFB=`https://huggingface.co/${MODEL}/resolve/main/`,CH=2*1048576;
+const MF=["config.json","generation_config.json","tokenizer.json","tokenizer_config.json","onnx/encoder_model_quantized.onnx","onnx/decoder_model_merged_quantized.onnx"];
+const ck=(f,i)=>`${f}|${String(i).padStart(6,"0")}`;
+async function probe(url){
+  for(let k=0;k<3;k++){
+    try{
+      const r=await fetch(url,{headers:{Range:"bytes=0-0"}});
+      if(r.status===206){const m=/\/(\d+)$/.exec(r.headers.get("content-range")||"");if(m){r.body&&r.body.cancel&&r.body.cancel().catch(()=>{});return{size:+m[1],range:true}}}
+      if(r.ok){const s=+r.headers.get("content-length")||0;r.body&&r.body.cancel&&r.body.cancel().catch(()=>{});return{size:s,range:false}}
+    }catch(e){await sleep(1500*(k+1))}
+  }
+  try{const r=await fetch(url);const s=+r.headers.get("content-length")||0;r.body&&r.body.cancel&&r.body.cancel().catch(()=>{});return{size:s,range:false}}catch(e){throw new Error("offline")}
+}
+async function dlOne(f,c){
+  const url=HFB+f,hit=await c.match(url);
+  if(hit){const s=+hit.headers.get("content-length")||1;files[f]={l:s,t:s};upd(f);return}
+  let meta=await dbGet("m|"+f,"ch");
+  while(!meta){try{meta=await probe(url);await dbSet("m|"+f,meta,"ch")}catch(e){await sleep(3000)}}
+  const size=meta.size;files[f]={l:0,t:size||1};
+  if(!meta.range||!size){
+    for(let k=0;;k++){
+      try{
+        const r=await fetch(url);if(!r.ok)throw new Error("HTTP "+r.status);
+        const rd=r.body.getReader(),parts=[];let got=0;
+        for(;;){const x=await rd.read();if(x.done)break;parts.push(x.value);got+=x.value.length;files[f]={l:got,t:Math.max(size,got)};upd(f)}
+        await c.put(url,new Response(new Blob(parts),{headers:{"content-length":String(got)}}));files[f]={l:got,t:got};upd(f);return;
+      }catch(e){await sleep(Math.min(10000,1000*2**Math.min(k,4)))}
+    }
+  }
+  const n=Math.ceil(size/CH);let i=0;
+  while(i<n&&await dbGet(ck(f,i),"ch"))i++;
+  files[f].l=Math.min(i*CH,size);upd(f);
+  for(;i<n;i++){
+    const s=i*CH,e=Math.min(size,s+CH)-1;
+    for(let k=0;;k++){
+      try{
+        const r=await fetch(url,{headers:{Range:`bytes=${s}-${e}`}});
+        if(r.status!==206)throw new Error("HTTP "+r.status);
+        const buf=await r.arrayBuffer();if(buf.byteLength!==e-s+1)throw new Error("short chunk");
+        await dbSet(ck(f,i),buf,"ch");break;
+      }catch(x){await sleep(Math.min(10000,1000*2**Math.min(k,4)))}
+    }
+    files[f].l=e+1;upd(f);
+  }
+  const parts=[];let tot=0;
+  for(let j=0;j<n;j++){const b=await dbGet(ck(f,j),"ch");if(!b)throw new Error("missing chunk");parts.push(b);tot+=b.byteLength}
+  if(tot!==size){await dbDelPrefix(f+"|");await dbSet("m|"+f,undefined,"ch");throw new Error("size mismatch "+f)}
+  await c.put(url,new Response(new Blob(parts),{headers:{"content-length":String(size),"content-type":f.endsWith(".json")?"application/json":"application/octet-stream"}}));
+  await dbDelPrefix(f+"|");
+}
+async function prefetchModel(){
+  const c=await caches.open(CACHE);
+  setState("DOWNLOADING");
+  for(const f of MF){
+    for(let k=0;;k++){try{await dlOne(f,c);break}catch(e){if(k>5)throw e;await sleep(2000)}}
+  }
+  preOK=true;
+}
+
+/* ───── Libraries cache (pdf.js, pdf-lib, tesseract) ───── */
+const PDFJS="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/",PDFLIB="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js",SC=1.5;
+const TESS="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js",LC="abas-libs";
+const LIBS=[PDFJS+"pdf.min.js",PDFJS+"pdf.worker.min.js",PDFLIB,TESS];
+async function cachedRes(u){
+  try{const c=await caches.open(LC);let r=await c.match(u);if(!r){r=await fetch(u);if(!r.ok)throw 0;await c.put(u,r.clone())}return r}
+  catch(e){return fetch(u)}
+}
+async function warmLibs(){
+  for(const u of LIBS){for(let k=0;k<4;k++){try{await cachedRes(u);break}catch(e){await sleep(2000)}}}
+  try{const cv=document.createElement("canvas");cv.width=60;cv.height=30;const x=cv.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,60,30);x.fillStyle="#000";x.font="20px sans-serif";x.fillText("Hi",8,22);await ocr(cv,"auto")}catch(e){}
+  refreshStorage();
+}
+
+/* ───── Engine ───── */
+function loadEngine(){
+  if(loadPromise)return loadPromise;           // never two concurrent loads
+  setState("CHECKING");keepAlive();localStorage.abas_want="1";
+  loadPromise=(async()=>{
+    try{
+      try{await prefetchModel()}catch(e){preOK=false}
+      setState("LOADING");
+      translator=await pipeline("translation",MODEL,{
+        dtype:"q8",
+        progress_callback:e=>{
+          if(e.status==="initiate"||e.status==="download"){setState(preOK?"LOADING":"DOWNLOADING");}
+          if(e.status==="progress"&&!preOK){
+            files[e.file]={l:e.loaded,t:e.total};upd(e.file);
+          }
+          if(e.status==="done"&&files[e.file]){files[e.file].l=files[e.file].t}
+          if(e.status==="ready"){setState("LOADING")}
+        }
+      });
+      prog.pct=100;render();setState("READY");render();refreshStorage();
+      warmLibs();
+    }catch(x){loadPromise=null;setState("ERROR",String(x.message||x));render();setTimeout(()=>{if(state==="ERROR"&&localStorage.abas_want)loadEngine()},8000)}
+  })();
+  return loadPromise;
+}
+$("loadBtn").onclick=()=>{navigator.storage?.persist?.();keepAlive();loadEngine()};
+
+/* ───── Language detection (by script only — honest limit: Latin defaults to English) ───── */
+function guess(t){
+  if(/[\u0600-\u06FF]/.test(t))return /[پچژگ]/.test(t)?"pes_Arab":"arb_Arab";
+  if(/[\u0590-\u05FF]/.test(t))return"heb_Hebr";
+  if(/[\u0400-\u04FF]/.test(t))return"rus_Cyrl";
+  if(/[\u3040-\u30FF]/.test(t))return"jpn_Jpan";
+  if(/[\uAC00-\uD7AF]/.test(t))return"kor_Hang";
+  if(/[\u4E00-\u9FFF]/.test(t))return"zho_Hans";
+  if(/[\u0900-\u097F]/.test(t))return"hin_Deva";
+  if(/[\u0E00-\u0E7F]/.test(t))return"tha_Thai";
+  if(/[\u0370-\u03FF]/.test(t))return"ell_Grek";
+  return"eng_Latn";
+}
+async function translate(text,src,tgt,origin){
+  if(state!=="READY")throw new Error("المحرك غير جاهز");
+  src=!src||src==="auto"?guess(text):src;
+  const job={id:Date.now().toString(36),src,tgt,n:text.length,status:"RUNNING",origin};
+  jobs.unshift(job);if(jobs.length>20)jobs.pop();
+  try{
+    const parts=text.split(/\n+/).filter(s=>s.trim());
+    const res=[];
+    for(const p of parts){
+      const r=await translator(p,{src_lang:src,tgt_lang:tgt,max_length:400});
+      res.push(r[0].translation_text);
+    }
+    job.status="DONE";return {src,out:res.join("\n")};
+  }catch(x){job.status="ERROR";throw x}
+}
+$("trBtn").onclick=async()=>{
+  const t=$("src").value.trim();if(!t)return;
+  $("trBtn").disabled=true;$("out").textContent="…";
+  try{
+    const r=await translate(t,$("sl").value,$("tl").value,"web");
+    $("out").textContent=r.out;
+    $("out").style.direction=["arb_Arab","pes_Arab","urd_Arab","heb_Hebr"].includes($("tl").value)?"rtl":"ltr";
+  }catch(x){$("out").textContent="خطأ: "+x.message}
+  $("trBtn").disabled=state!=="READY";
+};
+$("cpBtn").onclick=()=>navigator.clipboard.writeText($("out").textContent);
+
+
+/* ───── PDF in place (books) ───── */
+let pdfFile=null,pdfStop=false,pdfDoc=null,pdfKey="",jobMsg=null,jobEdit=0,wl=null;
+const TM=new Map(),RTL=["arb_Arab","pes_Arab","urd_Arab","heb_Hebr","prs_Arab","pbt_Arab","ydd_Hebr","ckb_Arab","uig_Arab","snd_Arab"];
+const loadScript=async u=>{
+  const b=await (await cachedRes(u)).blob();
+  return new Promise((ok,no)=>{const e=document.createElement("script");e.src=URL.createObjectURL(b);e.onload=ok;e.onerror=()=>no(new Error("تعذر تحميل "+u));document.head.appendChild(e)});
+};
+async function getPdfJs(){
+  if(!window.pdfjsLib){
+    await loadScript(PDFJS+"pdf.min.js");
+    const w=await (await cachedRes(PDFJS+"pdf.worker.min.js")).text();
+    pdfjsLib.GlobalWorkerOptions.workerSrc=URL.createObjectURL(new Blob([w],{type:"text/javascript"}));
+  }
+  return pdfjsLib;
+}
+async function trRaw(t,src,tgt){const r=await translator(t,{src_lang:src,tgt_lang:tgt,max_length:400});return r[0].translation_text}
+function chunks(t){
+  const out=[];let c="";
+  for(const s of t.split(/(?<=[.!?؟。])\s+/)){if((c+" "+s).length>350&&c){out.push(c);c=s}else c+=(c?" ":"")+s}
+  if(c)out.push(c);return out;
+}
+async function transBlock(t,pick,tgt){
+  const src=pick==="auto"?guess(t):pick;if(src===tgt)return t;
+  const k=src+">"+tgt+"|"+t;if(TM.has(k))return TM.get(k);
+  const o=[];for(const c of chunks(t)){if(pdfStop)throw new Error("stopped");o.push(await trRaw(c,src,tgt))}
+  const r=o.join(" ");TM.set(k,r);if(TM.size>5000)TM.delete(TM.keys().next().value);return r;
+}
+/* filtering, batching, QA */
+const QS={c:0,ms:0,f:0};
+const SKIP=/^(?:[\d\s.,:;\-–—\/()%+=*#@&_|\\[\]{}<>$€£°"'«»]+|https?:\/\/\S+|[\w.+-]+@[\w-]+\.[\w.]+)$/i;
+const ovl=(a,b)=>{const w=Math.min(a.x1,b.x1)-Math.max(a.x0,b.x0),h=Math.min(a.y1,b.y1)-Math.max(a.y0,b.y0);return w>0&&h>0?w*h:0};
+const area=b=>(b.x1-b.x0)*(b.y1-b.y0);
+function filterBlocks(bl,W,H){
+  bl=bl.filter(k=>k.t.length>1&&!SKIP.test(k.t)&&(k.t.match(/\p{L}/gu)||[]).length>=2);
+  bl.forEach(k=>{const b=k.b;b.x0=Math.max(0,b.x0);b.y0=Math.max(0,b.y0);b.x1=Math.min(W,b.x1);b.y1=Math.min(H,b.y1)});
+  bl=bl.filter(k=>k.b.x1-k.b.x0>4&&k.b.y1-k.b.y0>4).sort((a,b)=>a.b.y0-b.b.y0||a.b.x0-b.b.x0);
+  for(let i=0;i<bl.length;i++){
+    for(let j=i+1;j<bl.length;j++){
+      const A=bl[i],B=bl[j];if(!A)break;if(!B)continue;
+      if(B.b.y0>A.b.y1)break;
+      const o=ovl(A.b,B.b);if(!o)continue;
+      if(o>Math.min(area(A.b),area(B.b))*.6||(B.b.y0>A.b.y0&&B.b.y1-A.b.y1<B.fs*.8)){
+        A.t=A.b.y0<=B.b.y0?A.t+" "+B.t:B.t+" "+A.t;
+        A.b={x0:Math.min(A.b.x0,B.b.x0),x1:Math.max(A.b.x1,B.b.x1),y0:Math.min(A.b.y0,B.b.y0),y1:Math.max(A.b.y1,B.b.y1)};A.fs=Math.max(A.fs,B.fs);bl[j]=null;
+      }else if(B.b.y0>A.b.y0+(A.b.y1-A.b.y0)*.3){B.b.y0=A.b.y1+1}
+      else{const mid=(Math.max(A.b.x0,B.b.x0)+Math.min(A.b.x1,B.b.x1))/2;if(A.b.x0<=B.b.x0){A.b.x1=mid-1;B.b.x0=mid+1}else{B.b.x1=mid-1;A.b.x0=mid+1}}
+    }
+  }
+  return bl.filter(k=>k&&k.b.x1-k.b.x0>4&&k.b.y1-k.b.y0>4);
+}
+const SCN={Arab:"Arabic",Latn:"Latin",Cyrl:"Cyrillic",Deva:"Devanagari",Hans:"Han",Hant:"Han",Jpan:"Han",Hang:"Hangul",Grek:"Greek",Hebr:"Hebrew",Thai:"Thai",Beng:"Bengali",Ethi:"Ethiopic",Geor:"Georgian",Armn:"Armenian",Khmr:"Khmer",Laoo:"Lao",Mymr:"Myanmar",Taml:"Tamil",Telu:"Telugu",Knda:"Kannada",Mlym:"Malayalam",Sinh:"Sinhala",Gujr:"Gujarati",Guru:"Gurmukhi",Orya:"Oriya",Tibt:"Tibetan"};
+const nd=s=>s.replace(/[٠-٩]/g,c=>c.charCodeAt(0)-1632).replace(/[۰-۹]/g,c=>c.charCodeAt(0)-1776);
+function qa(src,out,tgt){
+  if(!out||!out.trim())return["empty"];
+  const f=[],r=out.length/Math.max(1,src.length);
+  if(src.length>12&&(r>3.5||r<.2))f.push("length");
+  if(/(\p{L}+)(\s+\1){3,}/u.test(out))f.push("repeat");
+  if(out.trim()===src.trim()&&(src.match(/\p{L}/gu)||[]).length>5)f.push("same");
+  const a=nd(src).match(/\d+/g)||[],b=nd(out).match(/\d+/g)||[];if(a.some(n=>!b.includes(n)))f.push("numbers");
+  const sc=SCN[tgt.split("_")[1]];
+  if(sc){const L=out.match(/\p{L}/gu)||[];if(L.length>=6){const rx=new RegExp("\\p{Script="+sc+"}","u");if(L.filter(ch=>rx.test(ch)).length/L.length<.5)f.push("script")}}
+  return f;
+}
+async function transMany(texts,pick,tgt){
+  const out=[],srcs=[],jobs=[];
+  texts.forEach((t,i)=>{
+    const src=srcs[i]=pick==="auto"?guess(t):pick;
+    if(src===tgt){out[i]=t;return}
+    const k=src+">"+tgt+"|"+t;if(TM.has(k)){out[i]=TM.get(k);return}
+    const cs=chunks(t);out[i]=cs.map(()=>"");cs.forEach((c,j)=>jobs.push({i,j,src,c}));
+  });
+  const by={};jobs.forEach(j=>(by[j.src]=by[j.src]||[]).push(j));
+  const t0=performance.now();
+  for(const src in by){
+    const L=by[src].sort((a,b)=>a.c.length-b.c.length);
+    for(let s=0;s<L.length;){
+      let e=s,ch=0;while(e<L.length&&e-s<8&&ch+L[e].c.length<2000){ch+=L[e].c.length;e++}
+      if(e===s)e=s+1;
+      if(pdfStop)throw new Error("stopped");
+      const B=L.slice(s,e),r=await translator(B.map(j=>j.c),{src_lang:src,tgt_lang:tgt,num_beams:1,max_new_tokens:Math.min(400,Math.ceil(B[B.length-1].c.length/2)+40),no_repeat_ngram_size:4});
+      B.forEach((j,n)=>{out[j.i][j.j]=r[n].translation_text});QS.c+=ch;s=e;
+    }
+  }
+  const res=[];
+  for(let i=0;i<texts.length;i++){
+    if(typeof out[i]==="string"){res.push({t:out[i],f:[]});continue}
+    let o=out[i].join(" "),f=qa(texts[i],o,tgt);
+    if(f.length){
+      if(pdfStop)throw new Error("stopped");
+      const o2=[];
+      for(const sn of texts[i].split(/(?<=[.!?؟。])\s+/))o2.push((await translator(sn,{src_lang:srcs[i],tgt_lang:tgt,num_beams:3,max_new_tokens:Math.min(400,Math.ceil(sn.length/2)+40),no_repeat_ngram_size:3,repetition_penalty:1.1}))[0].translation_text);
+      const t2=o2.join(" "),f2=qa(texts[i],t2,tgt);
+      if(f2.length<=f.length){o=t2;f=f2}
+    }
+    if(!f.length)TM.set(srcs[i]+">"+tgt+"|"+texts[i],o);
+    res.push({t:o,f});
+  }
+  QS.ms+=performance.now()-t0;QS.f+=res.filter(r=>r.f.length).length;
+  return res;
+}
+const fontsReady=async()=>{try{await Promise.all(["20px","bold 20px"].map(f=>document.fonts.load(f+" Vazirmatn","ابجabc")))}catch(e){}};
+/* layout: text items → lines → column segments → paragraph blocks (page pixel coords) */
+function blocksOf(tc,vp){
+  const U=pdfjsLib.Util,its=[];
+  for(const i of tc.items){if(!i.str||!i.str.trim())continue;const m=U.transform(vp.transform,i.transform);its.push({s:i.str,x:m[4],y:m[5],w:i.width*vp.scale,fs:Math.hypot(m[2],m[3])||10})}
+  its.sort((a,b)=>a.y-b.y);
+  const lines=[];
+  for(const it of its){const L=lines.find(l=>Math.abs(l.y-it.y)<it.fs*.4);if(L)L.it.push(it);else lines.push({y:it.y,it:[it]})}
+  const segs=[];
+  for(const L of lines){
+    L.it.sort((a,b)=>a.x-b.x);let cur=null;
+    for(const it of L.it){
+      if(cur&&it.x-cur.x1<cur.fs*2.5){cur.t+=(it.x-cur.x1>cur.fs*.15?" ":"")+it.s;cur.x1=Math.max(cur.x1,it.x+it.w);cur.fs=Math.max(cur.fs,it.fs)}
+      else{cur={t:it.s,x0:it.x,x1:it.x+it.w,y:L.y,fs:it.fs};segs.push(cur)}
+    }
+  }
+  segs.sort((a,b)=>a.y-b.y);
+  const bl=[];
+  for(const g of segs){
+    const B=bl.find(b=>g.y-b.ly>0&&g.y-b.ly<g.fs*1.7&&Math.abs(g.x0-b.x0)<g.fs*2.5&&Math.abs(g.fs-b.fs)<g.fs*.3);
+    if(B){B.t=/[-\u00AD]$/.test(B.t)&&/^[a-z]/.test(g.t)?B.t.slice(0,-1)+g.t:B.t+" "+g.t;B.x0=Math.min(B.x0,g.x0);B.x1=Math.max(B.x1,g.x1);B.ly=g.y}
+    else bl.push({t:g.t,x0:g.x0,x1:g.x1,fy:g.y,ly:g.y,fs:g.fs});
+  }
+  return bl.map(b=>({t:b.t.normalize("NFKC").replace(/\s+/g," ").trim(),fs:b.fs,b:{x0:b.x0,x1:b.x1,y0:b.fy-b.fs*.95,y1:b.ly+b.fs*.3}}));
+}
+async function ocrBlocks(c,pick){
+  const r=await ocr(c,pick);
+  return r.data.paragraphs.filter(p=>p.confidence>40&&p.text.trim().length>1).map(p=>{
+    const h=p.bbox.y1-p.bbox.y0,n=Math.max(1,(p.lines||[1]).length);
+    return{t:p.text.replace(/\s+/g," ").trim(),fs:h/n*.8,b:{x0:p.bbox.x0,x1:p.bbox.x1,y0:p.bbox.y0,y1:p.bbox.y1}};
+  });
+}
+async function renderPage(pg,sc){
+  const vp=pg.getViewport({scale:sc}),c=document.createElement("canvas");c.width=vp.width|0;c.height=vp.height|0;
+  await pg.render({canvasContext:c.getContext("2d",{willReadFrequently:true}),viewport:vp}).promise;
+  return{c,vp};
+}
+function ringBg(img,b){
+  const W=img.width,H=img.height,d=img.data,px=[];
+  const pt=(x,y)=>{x=Math.max(0,Math.min(W-1,x|0));y=Math.max(0,Math.min(H-1,y|0));const i=(y*W+x)*4;px.push([d[i],d[i+1],d[i+2]])};
+  const st=Math.max(2,((b.x1-b.x0)/40)|0);
+  for(let x=b.x0;x<=b.x1;x+=st){pt(x,b.y0-3);pt(x,b.y1+3)}
+  for(let y=b.y0;y<=b.y1;y+=st){pt(b.x0-3,y);pt(b.x1+3,y)}
+  const med=k=>{const a=px.map(p=>p[k]).sort((m,n)=>m-n);return a[a.length>>1]};
+  return[med(0),med(1),med(2)];
+}
+function inkOf(img,b,bg){
+  const W=img.width,d=img.data,x0=Math.max(0,b.x0|0),x1=Math.min(W-1,b.x1|0),y0=Math.max(0,b.y0|0),y1=Math.min(img.height-1,b.y1|0);
+  const st=Math.max(1,Math.floor(Math.sqrt(Math.max(1,(x1-x0)*(y1-y0))/2500))),pts=[];let best=0;
+  for(let y=y0;y<=y1;y+=st)for(let x=x0;x<=x1;x+=st){const i=(y*W+x)*4,dd=Math.abs(d[i]-bg[0])+Math.abs(d[i+1]-bg[1])+Math.abs(d[i+2]-bg[2]);pts.push([dd,d[i],d[i+1],d[i+2]]);if(dd>best)best=dd}
+  if(best<90){const l=.299*bg[0]+.587*bg[1]+.114*bg[2];return l>140?[17,17,17]:[255,255,255]}
+  const s=[0,0,0];let n=0;for(const p of pts)if(p[0]>best*.7){s[0]+=p[1];s[1]+=p[2];s[2]+=p[3];n++}
+  return s.map(v=>Math.round(v/n));
+}
+function layout(x,t,w,fs,h,minSz){
+  const cjk=/[\u3040-\u9FFF\uAC00-\uD7AF]/.test(t),words=cjk?[...t]:t.split(/\s+/);let sz=Math.max(minSz,fs);
+  for(;;){
+    x.font=`${sz}px Vazirmatn,Tahoma,sans-serif`;
+    const lines=[];let cur="";
+    for(const wd of words){const tr=cur?cur+(cjk?"":" ")+wd:wd;if(x.measureText(tr).width>w&&cur){lines.push(cur);cur=wd}else cur=tr}
+    if(cur)lines.push(cur);
+    const fits=lines.length*sz*1.25<=h*1.15;
+    if(fits||sz<=minSz)return{sz,lines,fits};
+    sz=Math.max(minSz,sz-Math.max(.5,sz*.06));
+  }
+}
+function paint(c,blocks,rtl){
+  const x=c.getContext("2d"),img=x.getImageData(0,0,c.width,c.height),P=[],over=[];let n=0;
+  for(const k of blocks){const b=k.b,pad=k.fs*.12,bg=ringBg(img,b);P.push({k,fg:inkOf(img,b,bg)});x.fillStyle=`rgb(${bg})`;x.fillRect(b.x0-pad,b.y0-pad,b.x1-b.x0+pad*2,b.y1-b.y0+pad*2)}
+  x.direction=rtl?"rtl":"ltr";x.textAlign=rtl?"right":"left";x.textBaseline="top";
+  for(const{k,fg}of P){
+    const b=k.b,bw=b.x1-b.x0,bh=b.y1-b.y0,ax=rtl?b.x1:b.x0;
+    x.fillStyle=`rgb(${fg})`;
+    const L=layout(x,k.tr,bw,k.fs,bh,Math.max(7,k.fs*.6));
+    if(L.fits){x.font=`${L.sz}px Vazirmatn,Tahoma,sans-serif`;L.lines.forEach((l,i)=>x.fillText(l,ax,b.y0+i*L.sz*1.25))}
+    else{n++;over.push({n,t:k.tr});x.font=`bold ${Math.max(9,Math.min(k.fs,bh*.8))}px Vazirmatn,Tahoma,sans-serif`;x.fillText(`(${n})`,ax,b.y0)}
+  }
+  return over;
+}
+function textPages(items,W,H,rtl,title){
+  const pages=[],m=W*.08,fs=Math.max(18,W/42),lh=fs*1.7,F=w=>`${w}${fs}px Vazirmatn,Tahoma,sans-serif`;let c,x,y;
+  const np=()=>{c=document.createElement("canvas");c.width=W;c.height=H;x=c.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,W,H);x.fillStyle="#111";x.direction=rtl?"rtl":"ltr";x.textAlign=rtl?"right":"left";x.textBaseline="top";x.font=F("bold ");x.fillText(title,rtl?W-m:m,m*.6);y=m*.6+lh*1.4;pages.push(c)};
+  np();
+  for(const it of items){
+    x.font=F("");const words=(`(${it.n}) `+it.t).split(/\s+/),lines=[];let cur="";
+    for(const wd of words){const tr=cur?cur+" "+wd:wd;if(x.measureText(tr).width>W-2*m&&cur){lines.push(cur);cur=wd}else cur=tr}
+    if(cur)lines.push(cur);
+    for(const l of lines){if(y+lh>H-m){np();x.font=F("")}x.fillText(l,rtl?W-m:m,y);y+=lh}
+    y+=lh*.4;
+  }
+  return pages;
+}
+async function addCover(out,d,I){
+  if(!d)return;
+  const[W,H,pw,ph]=d,c=document.createElement("canvas");c.width=W;c.height=H;const x=c.getContext("2d");
+  const g=x.createLinearGradient(0,0,W,H);g.addColorStop(0,"#050508");g.addColorStop(1,"#241447");x.fillStyle=g;x.fillRect(0,0,W,H);
+  x.textAlign="center";x.textBaseline="middle";
+  const t=(s,y,sz,col,dir="rtl",w="")=>{x.direction=dir;x.fillStyle=col;x.font=`${w} ${sz}px Vazirmatn,Tahoma,sans-serif`;x.fillText(s,W/2,y,W*.9)};
+  const d0=new Date(),loc="ar-u-nu-latn",tz=Intl.DateTimeFormat().resolvedOptions().timeZone,lg=(LANGS.find(l=>l[0]===I.tgt)||[0,I.tgt])[1];
+  t("ABAS",H*.16,W*.16,"#46D9FF","ltr","bold");
+  t("تمت الترجمة بواسطة ABAS",H*.27,W*.058,"#F5F5F7","rtl","bold");
+  t("Translated by ABAS",H*.32,W*.04,"#969AA8","ltr");
+  t(d0.toLocaleDateString(loc,{weekday:"long",year:"numeric",month:"long",day:"numeric"}),H*.42,W*.045,"#F5F5F7");
+  t("الساعة "+d0.toLocaleTimeString(loc,{hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false})+" ("+tz+")",H*.47,W*.04,"#F5F5F7");
+  t("Telegram: @NFW222",H*.56,W*.05,"#9B5CFF","ltr","bold");
+  t(I.name,H*.68,W*.035,"#969AA8","ltr");
+  t(`إلى: ${lg} · الصفحات ${I.s}–${I.e} من ${I.N}`,H*.73,W*.035,"#969AA8");
+  t(`كتل مترجمة: ${I.b} · تحتاج مراجعة: ${I.f} · صفحات تتمة: ${I.o}`+(I.m?` · غير مترجمة: ${I.m}`:""),H*.78,W*.032,"#969AA8");
+  t("Xenova/nllb-200-distilled-600M",H*.9,W*.03,"#5b5f70","ltr");
+  const bl=await new Promise(r=>c.toBlob(r,"image/jpeg",.9)),im=await out.embedJpg(await bl.arrayBuffer());
+  out.insertPage(0,[pw,ph]).drawImage(im,{x:0,y:0,width:pw,height:ph});
+}
+$("pdfIn").onchange=e=>{
+  pdfFile=e.target.files[0]||null;pdfDoc=null;
+  pdfKey=pdfFile?`${pdfFile.name}|${pdfFile.size}|${pdfFile.lastModified}`:"";
+  $("pdfGo").disabled=$("pdfExp").disabled=!pdfFile;
+};
+$("pdfStop").onclick=()=>{pdfStop=true;$("pst").textContent="سيتوقف بعد الصفحة الحالية…"};
+async function openDoc(){if(!pdfDoc){const lib=await getPdfJs();pdfDoc=await lib.getDocument({data:await pdfFile.arrayBuffer()}).promise}return pdfDoc}
+const busy=b=>{$("pdfGo").disabled=b;$("pdfExp").disabled=b;$("pdfStop").disabled=!b};
+$("pdfGo").onclick=async()=>{
+  if(!pdfFile)return;
+  if(state!=="READY"){$("pst").textContent="حمّل المحرك أولاً";return}
+  pdfStop=false;busy(true);await fontsReady();keepAlive();
+  const tgt=$("tl").value,pick=$("sl").value,rtl=RTL.includes(tgt);
+  try{wl=await navigator.wakeLock?.request("screen")}catch(e){}
+  const job={id:Date.now().toString(36),src:pick,tgt,n:0,status:"RUNNING",origin:"pdf"};jobs.unshift(job);jobMsg=null;
+  try{
+    const doc=await openDoc(),N=doc.numPages,t0=Date.now();let done=0,skipped=0,nxt=null;
+    const prep=async i=>{const pg=await doc.getPage(i),r=await renderPage(pg,SC);return{c:r.c,vp:r.vp,tc:await pg.getTextContent()}};
+    $("pt").placeholder="إلى ("+N+")";
+    for(let i=1;i<=N;i++){
+      if(pdfStop){job.status="PAUSED";break}
+      job.n=i;
+      const key=`${pdfKey}|${tgt}|${i}`;
+      if(await dbGet(key)){skipped++}
+      else{
+        const P=nxt&&nxt.i===i?await nxt.p:await prep(i),c=P.c,vp=P.vp;nxt=null;
+        if(i<N&&!(await dbGet(`${pdfKey}|${tgt}|${i+1}`))){nxt={i:i+1,p:prep(i+1)};nxt.p.catch(()=>{})}
+        let bl=blocksOf(P.tc,vp);
+        if(!bl.length&&$("ocrOn").checked){$("pst").textContent=`OCR للصفحة ${i}…`;try{bl=await ocrBlocks(c,pick)}catch(e){$("pst").textContent="فشل OCR: "+e.message}}
+        const out=[];
+        try{
+          bl=filterBlocks(bl,c.width,c.height);
+          const T=await transMany(bl.map(k=>k.t),pick,tgt);
+          bl.forEach((k,n)=>{if(T[n].t!==k.t)out.push({b:k.b,fs:k.fs,tr:T[n].t,f:T[n].f})});
+        }catch(e){if(pdfStop){job.status="PAUSED";break}throw e}
+        await dbSet(key,{sc:SC,blocks:out,nb:bl.length});done++;
+        paint(c,out,rtl);const pv=$("pvCv");pv.width=c.width;pv.height=c.height;pv.style.display="block";pv.getContext("2d").drawImage(c,0,0);
+      }
+      const pct=i/N*100,eta=done?((Date.now()-t0)/done)*(N-i)/1000:0;
+      $("pbar").style.width=pct+"%";
+      $("pst").textContent=`الصفحة ${i}/${N}`+(skipped?` (${skipped} محفوظة سابقاً)`:"")+(eta?` — المتبقي ≈ ${Math.ceil(eta/60)} دقيقة`:"")+(QS.ms?` · ${Math.round(QS.c/(QS.ms/1000))} حرف/ث`:"")+(QS.f?` · ⚠${QS.f} للمراجعة`:"");
+      jobProgress(`PDF ${pdfFile.name}\n${barTxt(pct)}\nPage ${i}/${N}`+(eta?`\nETA ~${Math.ceil(eta/60)} min`:""));
+    }
+    if(job.status==="RUNNING"){job.status="DONE";$("pst").textContent="اكتملت الترجمة — يمكنك التصدير الآن";jobProgress("PDF DONE ✓ "+pdfFile.name,true)}
+    else $("pst").textContent+=" — أُوقفت مؤقتاً، أعد الضغط للاستئناف";
+  }catch(x){job.status="ERROR";$("pst").textContent="خطأ: "+x.message;jobProgress("PDF ERROR: "+x.message,true)}
+  try{wl&&wl.release()}catch(e){}
+  busy(false);$("pdfStop").disabled=true;refreshBooks();
+};
+$("pdfExp").onclick=async()=>{
+  if(!pdfFile)return;
+  busy(true);$("pdfStop").disabled=true;
+  try{
+    const doc=await openDoc(),N=doc.numPages,tgt=$("tl").value,rtl=RTL.includes(tgt);
+    if(!window.PDFLib)await loadScript(PDFLIB);await fontsReady();
+    const from=Math.max(1,+$("pf").value||1),to=Math.min(N,+$("pt").value||N),size=Math.max(1,+$("pc").value||50);
+    let missing=0;
+    for(let s=from;s<=to;s+=size){
+      const e=Math.min(to,s+size-1),out=await PDFLib.PDFDocument.create(),ST={b:0,f:0,m:0,o:0};let d0=null;
+      for(let i=s;i<=e;i++){
+        $("pst").textContent=`تصدير الصفحة ${i} / ${to}`;$("pbar").style.width=((i-from)/(to-from+1)*100)+"%";
+        const rec=await dbGet(`${pdfKey}|${tgt}|${i}`),pg=await doc.getPage(i),{c}=await renderPage(pg,rec?rec.sc:SC),v=pg.getViewport({scale:1});
+        let ov=[];
+        if(rec){ov=paint(c,rec.blocks,rtl);ST.b+=rec.blocks.length;ST.f+=rec.blocks.filter(k=>k.f&&k.f.length).length}else{missing++;ST.m++}
+        const add=async cv=>{const bl=await new Promise(r=>cv.toBlob(r,"image/jpeg",.85)),im=await out.embedJpg(await bl.arrayBuffer());out.addPage([v.width,v.height]).drawImage(im,{x:0,y:0,width:v.width,height:v.height})};
+        if(!d0)d0=[c.width,c.height,v.width,v.height];
+        await add(c);
+        if(ov.length)for(const tp of textPages(ov,c.width,c.height,rtl,`تتمة الصفحة ${i}`)){await add(tp);ST.o++;tp.width=tp.height=0}
+        c.width=c.height=0;
+      }
+      await addCover(out,d0,{name:pdfFile.name,tgt,s,e,N,...ST});
+      const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([await out.save()],{type:"application/pdf"}));
+      a.download=`abas-${pdfFile.name.replace(/\.pdf$/i,"")}-${tgt}-${s}-${e}.pdf`;a.click();
+      await new Promise(r=>setTimeout(r,600));
+    }
+    $("pbar").style.width="100%";
+    $("pst").textContent="تم التصدير"+(missing?` — ${missing} صفحة غير مترجمة بعد (أُدرجت كما هي)`:"")+". إن حجب المتصفح التنزيلات المتعددة فاسمح بها.";
+  }catch(x){$("pst").textContent="خطأ التصدير: "+x.message}
+  busy(false);$("pdfStop").disabled=true;
+};
+async function jobProgress(t,force){
+  if(!polling)return;
+  if(!force&&Date.now()-jobEdit<2500)return;jobEdit=Date.now();
+  try{
+    if(!jobMsg)jobMsg=(await tg("sendMessage",{chat_id:OWN,text:t})).message_id;
+    else await tg("editMessageText",{chat_id:OWN,message_id:jobMsg,text:t});
+  }catch(e){}
+}
+
+/* ───── OCR + Image ───── */
+const TL={arb_Arab:"ara",eng_Latn:"eng",fra_Latn:"fra",deu_Latn:"deu",spa_Latn:"spa",ita_Latn:"ita",por_Latn:"por",rus_Cyrl:"rus",zho_Hans:"chi_sim",zho_Hant:"chi_tra",jpn_Jpan:"jpn",kor_Hang:"kor",tur_Latn:"tur",pes_Arab:"fas",urd_Arab:"urd",hin_Deva:"hin",heb_Hebr:"heb",ell_Grek:"ell",ukr_Cyrl:"ukr",nld_Latn:"nld",pol_Latn:"pol",ind_Latn:"ind",vie_Latn:"vie",tha_Thai:"tha",ben_Beng:"ben"};
+const ocrWorkers={};
+async function ocr(src,pick){
+  if(!window.Tesseract)await loadScript(TESS);
+  const t=TL[pick];
+  const lg=pick!=="auto"&&t?(t==="eng"?"eng":t+"+eng"):"eng+ara";
+  if(!ocrWorkers[lg]){$("pst").textContent="تحميل بيانات OCR ("+lg+")…";ocrWorkers[lg]=await Tesseract.createWorker(lg)}
+  return ocrWorkers[lg].recognize(src);
+}
+async function ocrPage(pg,pick){
+  const vp=pg.getViewport({scale:2}),c=document.createElement("canvas");
+  c.width=vp.width;c.height=vp.height;
+  await pg.render({canvasContext:c.getContext("2d"),viewport:vp}).promise;
+  const r=await ocr(c,pick);
+  return r.data.paragraphs.map(p=>p.text.replace(/\s+/g," ").trim()).filter(t=>t.length>1);
+}
+let imLines=[],imBase=null;
+function bgAt(b){
+  const W=imBase.width,H=imBase.height,d=imBase.data,px=[];
+  const pt=(x,y)=>{x=Math.max(0,Math.min(W-1,x|0));y=Math.max(0,Math.min(H-1,y|0));const i=(y*W+x)*4;px.push([d[i],d[i+1],d[i+2]])};
+  const st=Math.max(2,((b.x1-b.x0)/40)|0);
+  for(let x=b.x0;x<=b.x1;x+=st){pt(x,b.y0-3);pt(x,b.y1+3)}
+  for(let y=b.y0;y<=b.y1;y+=st){pt(b.x0-3,y);pt(b.x1+3,y)}
+  const med=k=>{const a=px.map(p=>p[k]).sort((m,n)=>m-n);return a[a.length>>1]};
+  return [med(0),med(1),med(2)];
+}
+function drawIm(){
+  const cv=$("imCv"),ctx=cv.getContext("2d");
+  ctx.putImageData(imBase,0,0);
+  const rtl=RTL.includes($("tl").value);
+  for(const l of imLines){
+    const b=l.b,h=b.y1-b.y0,w=b.x1-b.x0,bg=bgAt(b),pad=Math.max(2,h*.15);
+    ctx.fillStyle=`rgb(${bg})`;ctx.fillRect(b.x0-pad,b.y0-pad,w+pad*2,h+pad*2);
+    const lum=.299*bg[0]+.587*bg[1]+.114*bg[2];
+    ctx.fillStyle=lum>140?"#111":"#fff";
+    let sz=Math.max(8,h*.9);
+    do{ctx.font=`${sz}px Vazirmatn,Tahoma,sans-serif`;sz-=1}while(ctx.measureText(l.tr).width>w+pad*2&&sz>7);
+    ctx.direction=rtl?"rtl":"ltr";ctx.textAlign=rtl?"right":"left";ctx.textBaseline="middle";
+    ctx.fillText(l.tr,rtl?b.x1:b.x0,b.y0+h/2,w+pad*2);
+  }
+}
+function buildEd(){
+  const ed=$("imEd");ed.innerHTML="";
+  imLines.forEach((l,i)=>{const inp=document.createElement("input");inp.value=l.tr;inp.style.marginBottom="6px";inp.oninput=()=>{imLines[i].tr=inp.value};ed.appendChild(inp)});
+}
+$("imGo").onclick=async()=>{
+  const f=$("imIn").files[0];if(!f)return $("imSt").textContent="اختر صورة";
+  if(state!=="READY")return $("imSt").textContent="حمّل المحرك أولاً";
+  const tgt=$("tl").value,pick=$("sl").value,job={id:Date.now().toString(36),src:pick,tgt,n:0,status:"RUNNING",origin:"image"};jobs.unshift(job);
+  $("imGo").disabled=true;
+  try{
+    const bmp=await createImageBitmap(f),cv=$("imCv");
+    cv.width=bmp.width;cv.height=bmp.height;cv.style.display="block";
+    const ctx=cv.getContext("2d");ctx.drawImage(bmp,0,0);imBase=ctx.getImageData(0,0,cv.width,cv.height);
+    $("imSt").textContent="OCR…";
+    const r=await ocr(cv,pick),ls=r.data.lines.filter(l=>l.confidence>50&&l.text.trim().length>1);
+    imLines=[];
+    for(let i=0;i<ls.length;i++){
+      $("imSt").textContent=`ترجمة السطر ${i+1} / ${ls.length}`;
+      const raw=ls[i].text.replace(/\s+/g," ").trim(),src=pick==="auto"?guess(raw):pick;
+      imLines.push({b:ls[i].bbox,raw,tr:src===tgt?raw:await trRaw(raw,src,tgt)});
+    }
+    job.n=imLines.length;job.status="DONE";drawIm();buildEd();
+    $("imSt").textContent=imLines.length?`تمت ترجمة ${imLines.length} سطراً. راجع الأسطر وعدّلها عند الحاجة.`:"لم يُكتشف نص بثقة كافية.";
+    $("imRe").disabled=$("imDl").disabled=!imLines.length;
+  }catch(x){job.status="ERROR";$("imSt").textContent="خطأ: "+x.message}
+  $("imGo").disabled=false;
+};
+$("imRe").onclick=drawIm;
+$("imDl").onclick=()=>$("imCv").toBlob(b=>{const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="abas-translated.png";a.click()});
+
+/* ───── Storage center ───── */
+const nllbKeys=async c=>(await c.keys()).filter(r=>/nllb/i.test(r.url));
+async function refreshStorage(){
+  const L=[];let cached=false;
+  L.push(location.protocol==="file:"?"⚠️ الصفحة مفتوحة من ملف (file://): لن يُحفظ النموذج بشكل دائم. شغّلها عبر https أو localhost.":"الاتصال: "+location.protocol);
+  try{
+    const c=await caches.open(CACHE),ks=await nllbKeys(c);let sz=0;
+    for(const r of ks)sz+=+((await c.match(r)).headers.get("content-length")||0);
+    cached=ks.length>=MF.length;
+    L.push(cached?`النموذج: محفوظ في الجهاز (${ks.length} ملف${sz?" · "+mb(sz):""})`:ks.length?`النموذج: تنزيل جزئي (${ks.length}/${MF.length} ملف) — سيُستأنف`:"النموذج: غير محفوظ (سيُنزَّل عند التحميل)");
+  }catch(e){L.push("النموذج: تعذّر فحص التخزين")}
+  try{const lc=await caches.open(LC);L.push(`المكتبات: ${(await lc.keys()).length}/${LIBS.length} محفوظة`)}catch(e){}
+  try{
+    const e=await navigator.storage.estimate();
+    L.push(`المساحة: ${mb(e.usage)} مستخدمة من ${mb(e.quota)}`);
+    L.push("الحماية من الحذف التلقائي: "+(await navigator.storage.persisted()?"مفعّلة":"غير مفعّلة"));
+  }catch(e){}
+  $("stor").innerHTML=L.map(x=>`<div>${x}</div>`).join("");
+  return cached;
+}
+$("persBtn").onclick=async()=>{const ok=await navigator.storage?.persist?.();$("vfOut").textContent=ok?"تم تفعيل الحماية":"رفض المتصفح الطلب (جرّب بعد استخدام الموقع أو تثبيته على الشاشة الرئيسية)";refreshStorage()};
+$("vfBtn").onclick=async()=>{
+  $("vfOut").textContent="جارٍ الفحص…";
+  try{
+    const c=await caches.open(CACHE);let n=0,bad=0;
+    for(const r of await nllbKeys(c)){
+      const res=await c.match(r),exp=+res.headers.get("content-length")||0,rd=res.body.getReader();let got=0;
+      for(;;){const x=await rd.read();if(x.done)break;got+=x.value.length}
+      n++;if(exp&&got!==exp)bad++;
+    }
+    $("vfOut").textContent=!n?"لا توجد ملفات محفوظة":bad?`⚠️ ${bad} ملف غير مكتمل من ${n} — احذف النموذج وأعد التحميل`:`✓ ${n} ملف: الأحجام مطابقة (فحص حجم فقط، وليس hash)`;
+  }catch(e){$("vfOut").textContent="تعذّر الفحص: "+e.message}
+};
+$("delBtn").onclick=async()=>{
+  if(!confirm("حذف ملفات النموذج المحفوظة؟ سيُعاد تنزيلها (حوالي 600 MB)."))return;
+  await caches.delete(CACHE);for(const f of MF){await dbDelPrefix(f+"|");await dbDelPrefix("m|"+f)}
+  delete localStorage.abas_want;translator=null;loadPromise=null;preOK=false;for(const k in files)delete files[k];
+  setState("NOT_INITIALIZED");prog.pct=0;render();refreshStorage();
+};
+async function refreshBooks(){
+  const d=await idb(),keys=await new Promise(ok=>{const q=d.transaction("pg").objectStore("pg").getAllKeys();q.onsuccess=()=>ok(q.result);q.onerror=()=>ok([])});
+  const g={};
+  for(const k of keys){const p=String(k).split("|");p.pop();const id=p.join("|");(g[id]=g[id]||[]).push(k)}
+  const el=$("books");el.innerHTML="";
+  const ids=Object.keys(g);
+  if(!ids.length){el.textContent="لا توجد ترجمات محفوظة";el.className="small";return}
+  for(const id of ids){
+    const p=id.split("|"),row=document.createElement("div");row.className="row";row.style.cssText="justify-content:space-between;margin-top:8px";
+    const sp=document.createElement("span");sp.className="small";sp.textContent=`${p.slice(0,-3).join("|")} → ${p[p.length-1]} · ${g[id].length} صفحة`;
+    const b=document.createElement("button");b.className="alt";b.textContent="حذف";
+    b.onclick=async()=>{const t=(await idb()).transaction("pg","readwrite");g[id].forEach(k=>t.objectStore("pg").delete(k));t.oncomplete=()=>{refreshBooks();refreshStorage()}};
+    row.append(sp,b);el.appendChild(row);
+  }
+}
+
+/* ───── Self-test ───── */
+$("stBtn").onclick=async()=>{
+  const o=$("stOut"),R=[];o.textContent="…";
+  const T=async(n,fn)=>{const t=performance.now();try{const m=await fn();R.push(`${m===true?"✓ PASS":"✗ FAIL"} ${n} (${Math.round(performance.now()-t)}ms)${m===true?"":" — "+m}`)}catch(e){R.push("✗ FAIL "+n+" — "+e.message)}o.textContent=R.join("\n")};
+  await T("EN→AR",async()=>{const r=await trRaw("The book was translated by a machine.","eng_Latn","arb_Arab");return /\p{Script=Arabic}/u.test(r)||r});
+  await T("AR→EN",async()=>{const r=await trRaw("الكتاب مفيد جداً للطلاب.","arb_Arab","eng_Latn");return(r.match(/[A-Za-z]+/g)||[]).length>=3||r});
+  await T("FR→AR batch",async()=>{const r=await translator(["Bonjour le monde.","Merci beaucoup."],{src_lang:"fra_Latn",tgt_lang:"arb_Arab"});return r.length===2&&r.every(x=>/\p{Script=Arabic}/u.test(x.translation_text))||"batch"});
+  await T("QA أرقام",async()=>{const r=await transMany(["In 2024 there were 15 books."],"eng_Latn","arb_Arab");return!r[0].f.length||r[0].f.join(",")+" → "+r[0].t});
+};
+
+/* ───── Telegram: remote control + public translator bot ───── */
+let TOK=localStorage.abas_tok||"",OWN=localStorage.abas_own||"",polling=false,offset=+localStorage.abas_off||0,progMsg=null,lastEdit=0,pollGen=0,lastPoll=0;
+$("tok").value=TOK;$("own").value=OWN;$("ops").value=localStorage.abas_ops||"";
+async function tg(m,b){
+  const r=await fetch(`https://api.telegram.org/bot${TOK}/${m}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b||{})});
+  const j=await r.json();if(!j.ok)throw new Error(j.description);return j.result;
+}
+const send=t=>tg("sendMessage",{chat_id:OWN,text:t}).catch(()=>{});
+function statusText(){
+  return `ABAS ENGINE\nState: ${state}\n`+(state==="DOWNLOADING"?`${barTxt(prog.pct)}\nDownloaded: ${mb(prog.loaded)}\nTotal: ${prog.total?mb(prog.total):"unknown"}\nSpeed: ${prog.speed?mb(prog.speed)+"/s":"—"}\nFile: ${prog.file}\n`:"")+(state==="READY"?"Model: LOADED\nPDF ENGINE: "+(window.pdfjsLib?"READY":"ON DEMAND")+"\nOCR: "+(window.Tesseract?"READY":"ON DEMAND")+"\nTELEGRAM: CONNECTED\nSYSTEM STATUS: READY":state==="ERROR"?"Error: "+err:"");
+}
+async function tgNotify(t){if(polling)send(t)}
+async function tgProgress(){
+  if(!polling||Date.now()-lastEdit<2500)return;lastEdit=Date.now();
+  try{
+    if(!progMsg){progMsg=(await tg("sendMessage",{chat_id:OWN,text:statusText()})).message_id}
+    else await tg("editMessageText",{chat_id:OWN,message_id:progMsg,text:statusText()});
+  }catch(e){}
+}
+/* per-user language (ar / en) and default target */
+const US=JSON.parse(localStorage.abas_users||"{}");
+const saveUS=()=>{localStorage.abas_users=JSON.stringify(US)};
+const M={
+  ar:{
+    pick:"اختر لغتك | Choose your language",
+    welcome:"أهلاً بك في ABAS 😎\nمترجم النصوص والصور.",
+    menu:"📋 الأوامر:\n\n📷 أرسل صورة ← تصلك الصورة مترجمة\n✍️ أرسل أي نص ← تصلك ترجمته\n/t en نص — ترجمة نص للغة محددة\n/to en — تغيير لغة الترجمة الافتراضية\n/lang — تغيير لغة البوت\n/menu — عرض هذه القائمة\n\nرموز لغات: ar en fr de es it pt ru zh ja ko tr fa\nلغة الترجمة الحالية: ",
+    notready:"المحرك غير جاهز بعد، حاول بعد قليل.",
+    working:"⏳ جارٍ ترجمة الصورة…",
+    notext:"لم أجد نصاً واضحاً في الصورة.",
+    err:"حدث خطأ: ",
+    fmt:"الصيغة: /t en النص",
+    to:"تم ضبط لغة الترجمة: ",
+    badlang:"رمز لغة غير معروف. مثال: /to en",
+    owner:"للمالك فقط.",
+    cap:"ترجمة ABAS"
+  },
+  en:{
+    pick:"اختر لغتك | Choose your language",
+    welcome:"Welcome to ABAS 😎\nText & image translator.",
+    menu:"📋 Commands:\n\n📷 Send a photo → get it back translated\n✍️ Send any text → get its translation\n/t ar text — translate to a given language\n/to ar — change default target language\n/lang — change bot language\n/menu — show this menu\n\nLanguage codes: ar en fr de es it pt ru zh ja ko tr fa\nCurrent target: ",
+    notready:"The engine isn't ready yet, try again shortly.",
+    working:"⏳ Translating your image…",
+    notext:"I couldn't find clear text in the image.",
+    err:"Error: ",
+    fmt:"Usage: /t ar text",
+    to:"Target language set: ",
+    badlang:"Unknown language code. Example: /to en",
+    owner:"Owner only.",
+    cap:"Translated by ABAS"
+  }
+};
+const askLang=id=>tg("sendMessage",{chat_id:id,text:M.ar.pick,reply_markup:{inline_keyboard:[[{text:"العربية 🇮🇶",callback_data:"L:ar"},{text:"English 🇬🇧",callback_data:"L:en"}]]}}).catch(()=>{});
+const menuTxt=(id)=>{const u=US[id],m=M[u.ui];return m.menu+u.tgt};
+let queue=Promise.resolve();
+const enqueue=fn=>{const p=queue.then(fn,fn);queue=p.catch(()=>{});return p};
+async function botImage(id,fileId){
+  const u=US[id],m=M[u.ui],say=t=>tg("sendMessage",{chat_id:id,text:t}).catch(()=>{});
+  if(state!=="READY")return say(m.notready);
+  say(m.working);
+  return enqueue(async()=>{
+    const job={id:Date.now().toString(36),src:"auto",tgt:u.tgt,n:0,status:"RUNNING",origin:"telegram-image"};jobs.unshift(job);if(jobs.length>20)jobs.pop();
+    try{
+      pdfStop=false;await fontsReady();
+      const f=await tg("getFile",{file_id:fileId}),r=await fetch(`https://api.telegram.org/file/bot${TOK}/${f.file_path}`);
+      if(!r.ok)throw new Error("download "+r.status);
+      const bmp=await createImageBitmap(await r.blob()),c=document.createElement("canvas");
+      c.width=bmp.width;c.height=bmp.height;c.getContext("2d",{willReadFrequently:true}).drawImage(bmp,0,0);
+      let bl=filterBlocks(await ocrBlocks(c,"auto"),c.width,c.height);
+      if(!bl.length){job.status="DONE";return say(m.notext)}
+      const T=await transMany(bl.map(k=>k.t),"auto",u.tgt),out=[];
+      bl.forEach((k,n)=>{if(T[n].t!==k.t)out.push({b:k.b,fs:k.fs,tr:T[n].t,f:T[n].f})});
+      if(!out.length){job.status="DONE";return say(m.notext)}
+      paint(c,out,RTL.includes(u.tgt));
+      const blob=await new Promise(ok=>c.toBlob(ok,"image/jpeg",.92)),fd=new FormData();
+      fd.append("chat_id",String(id));fd.append("caption",m.cap);fd.append("photo",blob,"abas.jpg");
+      const sr=await fetch(`https://api.telegram.org/bot${TOK}/sendPhoto`,{method:"POST",body:fd}),sj=await sr.json();
+      if(!sj.ok)throw new Error(sj.description);
+      job.n=out.length;job.status="DONE";
+    }catch(x){job.status="ERROR";say(m.err+x.message)}
+  });
+}
+async function onMsg(m){
+  const id=String(m.chat.id),isOwner=id===String(OWN),isOp=isOwner||($("ops").value||"").split(/[,\s]+/).includes(id);
+  const txt=(m.text||"").trim(),[c0,...rest]=txt.split(/\s+/),c=c0.split("@")[0].toLowerCase();
+  const say=t=>tg("sendMessage",{chat_id:id,text:t}).catch(()=>{});
+  if(c==="/start"||c==="/lang"||!US[id])return askLang(id);
+  const u=US[id],t=M[u.ui];
+  if(c==="/menu"||c==="/help")return say(menuTxt(id));
+  if(c==="/status"){return isOp?say(statusText()):say(t.owner)}
+  if(c==="/jobs"){return isOp?say(jobs.length?jobs.map(j=>`${j.id} ${j.status} ${j.src}→${j.tgt} (${j.n})`).join("\n"):"No jobs"):say(t.owner)}
+  if(c==="/load"){if(!isOwner)return say(t.owner);if(state==="READY")return say("Already READY");say("Starting engine load…");progMsg=null;return loadEngine()}
+  if(c==="/cancel"){if(!isOwner)return say(t.owner);pdfStop=true;return say("Stopping after the current page…")}
+  if(c==="/to"){const code=SHORT[(rest[0]||"").toLowerCase()]||rest[0];if(!LANGS.some(l=>l[0]===code))return say(t.badlang);u.tgt=code;saveUS();return say(t.to+code)}
+  if(c==="/t"){
+    const code=SHORT[(rest[0]||"").toLowerCase()]||rest[0],text=rest.slice(1).join(" ");
+    if(!LANGS.some(l=>l[0]===code)||!text)return say(t.fmt);
+    if(state!=="READY")return say(t.notready);
+    try{const r=await enqueue(()=>translate(text,"auto",code,"telegram"));say(r.out)}catch(x){say(t.err+x.message)}
+    return;
+  }
+  const ph=m.photo&&m.photo.length?m.photo[m.photo.length-1].file_id:(m.document&&/^image\//.test(m.document.mime_type||"")?m.document.file_id:null);
+  if(ph)return botImage(id,ph);
+  if(txt&&!txt.startsWith("/")){
+    if(state!=="READY")return say(t.notready);
+    try{const r=await enqueue(()=>translate(txt,"auto",u.tgt,"telegram"));say(r.out)}catch(x){say(t.err+x.message)}
+    return;
+  }
+  say(menuTxt(id));
+}
+async function onCb(q){
+  const id=String(q.message.chat.id),d=q.data||"";
+  tg("answerCallbackQuery",{callback_query_id:q.id}).catch(()=>{});
+  if(d.startsWith("L:")){
+    const ui=d.slice(2)==="en"?"en":"ar";
+    US[id]={ui,tgt:US[id]?.tgt||(ui==="ar"?"arb_Arab":"eng_Latn")};
+    if(!US[id].tgt)US[id].tgt=ui==="ar"?"arb_Arab":"eng_Latn";
+    US[id].ui=ui;saveUS();
+    tg("sendMessage",{chat_id:id,text:M[ui].welcome+"\n\n"+menuTxt(id)}).catch(()=>{});
+  }
+}
+async function poll(gen){
+  while(polling&&gen===pollGen){
+    try{
+      lastPoll=Date.now();
+      const ups=await tg("getUpdates",{offset,timeout:25,allowed_updates:["message","callback_query"]});
+      $("tgst").textContent="متصل";
+      for(const u of ups){
+        offset=u.update_id+1;localStorage.abas_off=offset;
+        try{if(u.message)onMsg(u.message);if(u.callback_query)onCb(u.callback_query)}catch(e){}
+      }
+    }catch(e){
+      $("tgst").textContent="إعادة المحاولة: "+e.message;
+      if(/Unauthorized/.test(e.message)){polling=false;break}
+      await sleep(/Conflict/.test(e.message)?8000:3000);
+    }
+  }
+}
+function startPoll(){pollGen++;polling=true;poll(pollGen)}
+async function connectTg(){
+  TOK=$("tok").value.trim();OWN=$("own").value.trim();
+  if(!TOK||!/^\d+$/.test(OWN)){$("tgst").textContent="أدخل التوكن والـ Chat ID";return}
+  localStorage.abas_tok=TOK;localStorage.abas_own=OWN;localStorage.abas_ops=$("ops").value;localStorage.abas_tg="1";
+  try{
+    const me=await tg("getMe");polling=false;pollGen++;await sleep(100);
+    await tg("deleteWebhook");
+    tg("setMyCommands",{commands:[{command:"start",description:"Start / ابدأ"},{command:"menu",description:"Menu / القائمة"},{command:"lang",description:"Language / اللغة"},{command:"to",description:"Target language / لغة الترجمة"},{command:"t",description:"Translate text / ترجمة نص"}]}).catch(()=>{});
+    $("tgst").textContent="متصل @"+me.username;keepAlive();
+    startPoll();
+    send("ABAS CONNECTED\n"+statusText());
+  }catch(e){$("tgst").textContent="فشل: "+e.message}
+}
+$("tgBtn").onclick=connectTg;
+/* resume everything: model download, bot polling (page must be open; browsers cannot run closed pages) */
+function resumeAll(){
+  if(localStorage.abas_want&&(state==="NOT_INITIALIZED"||state==="ERROR")&&!loadPromise)loadEngine();
+  if(localStorage.abas_tg&&TOK&&OWN&&(!polling||Date.now()-lastPoll>70000))connectTg();
+}
+setInterval(()=>{if(polling&&Date.now()-lastPoll>70000)startPoll();if(localStorage.abas_want&&state==="ERROR"&&!loadPromise)loadEngine()},15000);
+render();refreshBooks();
+refreshStorage().then(c=>{if((c||localStorage.abas_want)&&state==="NOT_INITIALIZED")loadEngine()});
+if(localStorage.abas_tg&&TOK&&OWN)connectTg();
+</script>
+</body>
+</html>
